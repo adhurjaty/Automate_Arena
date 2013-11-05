@@ -255,7 +255,8 @@ def update_part(br, **properties):
     for r in revs.find_elements_by_tag_name('option'):
         if r.text == 'Working Revision':
             r.click() #select working revision for part
-
+            break
+    
     br.get(br.find_element_by_link_text('Update').get_attribute('href'))
 
     #update file page
