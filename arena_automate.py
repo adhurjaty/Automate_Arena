@@ -8,9 +8,79 @@ import os
 from itertools import izip, cycle
 import base64
 
-class MyApp:
-    def __init__(self, parent):
-		
+class MyApp(Tk.Tk):
+    def __init__(self):
+        Tk.Tk.__init__(self)
+
+        # the container is where we'll stack a bunch of frames
+        # on top of each other, then the one we want visible
+        # will be raised above the others
+        container = Tk.Frame(self)
+        container.pack(side='top', fill='both', expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        self.frames = {}
+        for F in (PromptAction, Login):
+            self.frames[F] = F(container, self)
+            self.frames[F].grid(row=0, column=0, sticky='nsew')
+
+        ret_user = return_user()
+        if ret_user:
+            [self.email, self.password, self.engineer] = ret_user
+            self.show_frame(PromptAction)
+        else:
+            self.show_frame(Login)
+
+    def show_frame(self, c):
+        self.frames[c].tkraise()
+
+class Login(Tk.Frame):
+    def __init__(self, parent, controller):
+        Tk.Frame.__init__(self, parent)
+        self.parent = parent
+        self.controller = controller
+        
+        controller.geometry('300x160')
+        controller.title('Enter your information')
+        
+        #entrys with not shown text
+        self.user = self.make_entry("Email Address Used in Arena:", 16)
+        self.password = self.make_entry("Password:", 16, show="*")
+        
+        #button to attempt to login
+        b = Tk.Button(self, borderwidth=4, text="Login", width=10, pady=8, command=self.login)
+        b.pack(side=Tk.BOTTOM)
+        self.password.bind('<Return>', self.login)
+
+    def login(self, event=None):
+        email = self.user.get()
+        password = self.password.get()
+        if not email or not password:
+            self.controller.destroy()
+            show_error('Value Error', 'Please Enter Email and Password')
+        with open('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'), 'w') as f:
+            f.write(email+'\n'+xor_crypt_string(password, encode=True))
+
+        name_hash = {'adhurjaty': 'Anil Dhurjaty', 'rsleiman': 'Richard Sleiman',
+                     'tkanusky': 'Thomas Kanusky', 'pneilson': 'Peter Neilson'}
+
+        engineer = name_hash[email.split('@')[0]]
+        
+        self.controller.show_frame(PromptAction)
+        
+    def make_entry(self, caption, width=None, **options):
+        Tk.Label(self, text=caption).pack(side=Tk.TOP)
+        entry = Tk.Entry(self, **options)
+        if width:
+            entry.config(width=width)
+            entry.pack(side=Tk.TOP, padx=10, fill=Tk.BOTH)
+        return entry
+
+class PromptAction(Tk.Frame):
+    def __init__(self, parent, controller):
+        Tk.Frame.__init__(self, parent)
+        
         #------ constants for controlling layout ------
         button_width = 6      ### (1)
         
@@ -22,72 +92,85 @@ class MyApp:
         buttons_frame_ipadx = "3m"   ### (3)
         buttons_frame_ipady = "1m"   ### (3)
         # -------------- end constants ----------------
+        self.controller = controller
+        self.controller.title('Select Action')
+        self.controller.geometry('150x50')
         
-        self.myParent = parent   
-        self.buttons_frame = Tk.Frame(parent)
-        
-        self.buttons_frame.pack(    ### (4)
+        '''self.pack(    ### (4)
             ipadx=buttons_frame_ipadx,  ### (3)
             ipady=buttons_frame_ipady,  ### (3)
             padx=buttons_frame_padx,    ### (3)
             pady=buttons_frame_pady,    ### (3)
-            )    
+            ) '''   
+
+        button1 = Tk.Button(self, command=self.revise, padx=buttons_frame_padx)
+        button1.configure(text="Revise Part")
+        button1.focus_force()       
+        button1.configure( 
+                width=button_width,  ### (1)
+                padx=button_padx,    ### (2) 
+                pady=button_pady     ### (2)
+                )
+
+        button1.pack(side=Tk.LEFT)	
+        button1.bind("<Return>", self.revise)  
         
-
-        self.button1 = Tk.Button(self.buttons_frame, command=self.revise)
-        self.button1.configure(text="Revise Part")
-        self.button1.focus_force()       
-        self.button1.configure( 
+        button2 = Tk.Button(self, command=self.replace)
+        button2.configure(text="Replace Part")  
+        button2.configure( 
                 width=button_width,  ### (1)
                 padx=button_padx,    ### (2) 
                 pady=button_pady     ### (2)
                 )
 
-        self.button1.pack(side=Tk.LEFT)	
-        self.button1.bind("<Return>", self.revise)  
-        
-        self.button2 = Tk.Button(self.buttons_frame, command=self.replace)
-        self.button2.configure(text="Replace Part")  
-        self.button2.configure( 
+        button2.pack(side=Tk.LEFT)
+        button2.bind("<Return>", self.replace)
+
+        button3 = Tk.Button(self, command=self.new_part)
+        button3.configure(text="New Part")  
+        button3.configure( 
                 width=button_width,  ### (1)
                 padx=button_padx,    ### (2) 
                 pady=button_pady     ### (2)
                 )
 
-        self.button2.pack(side=Tk.LEFT)
-        self.button2.bind("<Return>", self.replace)
-
-        self.button3 = Tk.Button(self.buttons_frame, command=self.new_part)
-        self.button3.configure(text="New Part")  
-        self.button3.configure( 
-                width=button_width,  ### (1)
-                padx=button_padx,    ### (2) 
-                pady=button_pady     ### (2)
-                )
-
-        self.button3.pack(side=Tk.LEFT)
-        self.button3.bind("<Return>", self.new_part) 
+        button3.pack(side=Tk.LEFT)
+        button3.bind("<Return>", self.new_part)
             
     def revise(self):
-        self.myParent.withdraw()
+        self.controller.withdraw()
         [email, password, engineer] = authenticate()
         params = get_pdf()
         params.update(engineer=engineer)
-        self.myParent.destroy()
+        self.controller.destroy()
         update_part(enter_arena(email, password), **params)
     
     def replace(self): 
-        self.myParent.destroy()
+        self.controller.destroy()
             
     def new_part(self):  
-        self.myParent.withdraw()
+        self.controller.withdraw()
         [email, password, engineer] = authenticate()
         params = get_pdf()
         part_name = tkSimpleDialog.askstring('Part Name', 'Enter Part Name')
         params.update(engineer=engineer)
         params.update(part_name=part_name)
-        self.myParent.destroy()
+        self.controller.destroy()
         create_part(enter_arena(email, password), **params)
+
+def return_user():
+    try:
+        with open('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'), 'r') as f:
+            [email, password] = f.read().split('\n')
+            password = xor_crypt_string(password, decode=True)
+            
+            name_hash = {'adhurjaty': 'Anil Dhurjaty', 'rsleiman': 'Richard Sleiman',
+                     'tkanusky': 'Thomas Kanusky', 'pneilson': 'Peter Neilson'}
+            engineer = name_hash[email.split('@')[0]]
+            
+            return [email, password, engineer]
+    except:
+        return False
 
 def authenticate():
     try:
@@ -323,9 +406,8 @@ def automate():
 #automate()
 
 
-root = Tk.Tk()
-myapp = MyApp(root)
-root.mainloop()
+myapp = MyApp()
+myapp.mainloop()
 
 
 
