@@ -44,8 +44,8 @@ class Login(Tk.Frame):
         self.parent = parent
         self.controller = controller
         
-        controller.geometry('300x160')
-        controller.title('Enter your information')
+        self.controller.geometry('300x160')
+        self.controller.title('Enter your information')
         
         #entrys with not shown text
         self.user = self.make_entry("Email Address Used in Arena:", 16)
@@ -127,7 +127,7 @@ class PromptAction(Tk.Frame):
                 pady=button_pady     ### (2)
                 )
 
-        button1.pack(side=Tk.LEFT)	
+        button1.pack(side=Tk.LEFT, padx='5m')	
         button1.bind("<Return>", self.revise)  
         
         button2 = Tk.Button(self, command=self.replace)
@@ -138,7 +138,7 @@ class PromptAction(Tk.Frame):
                 pady=button_pady     ### (2)
                 )
 
-        button2.pack(side=Tk.LEFT)
+        button2.pack(side=Tk.LEFT, padx='5m')
         button2.bind("<Return>", self.replace)
 
         button3 = Tk.Button(self, command=self.new_part)
@@ -149,7 +149,7 @@ class PromptAction(Tk.Frame):
                 pady=button_pady     ### (2)
                 )
 
-        button3.pack(side=Tk.LEFT)
+        button3.pack(side=Tk.LEFT, padx='5m')
         button3.bind("<Return>", self.new_part)
             
     def revise(self):
