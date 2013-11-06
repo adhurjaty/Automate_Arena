@@ -20,10 +20,12 @@ class MyApp(Tk.Tk):
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
+        #construct frames hash where separate windows are stored
         self.frames = {}
         for F in (PromptAction, Login):
             self.frames[F] = F(container, self)
             self.frames[F].grid(row=0, column=0, sticky='nsew')
+            #creates layout such that frames are ontop of one another
 
         ret_user = return_user()
         if ret_user:
@@ -34,6 +36,7 @@ class MyApp(Tk.Tk):
 
     def show_frame(self, c):
         self.frames[c].tkraise()
+        self.frames[c].focus_force()
 
 class Login(Tk.Frame):
     def __init__(self, parent, controller):
@@ -54,21 +57,38 @@ class Login(Tk.Frame):
         self.password.bind('<Return>', self.login)
 
     def login(self, event=None):
+        #get email and password and show error if one field is blank
         email = self.user.get()
         password = self.password.get()
         if not email or not password:
             self.controller.destroy()
             show_error('Value Error', 'Please Enter Email and Password')
+
+        #check that email and password are valid by putting them in Arena login
+        #will exit with error if it fails. save the browser place in the parent
+        self.controller.browser = enter_arena(email, password)
+
+        #write email and password to file in My Documents
         with open('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'), 'w') as f:
+            #encrypt password when writing the the login file
             f.write(email+'\n'+xor_crypt_string(password, encode=True))
 
+        #lookup table corresponding from username to full name
         name_hash = {'adhurjaty': 'Anil Dhurjaty', 'rsleiman': 'Richard Sleiman',
                      'tkanusky': 'Thomas Kanusky', 'pneilson': 'Peter Neilson'}
 
+        #look up engineer from hash after removing email domain
         engineer = name_hash[email.split('@')[0]]
-        
+
+        #store these variables in the parent for usage in the PromptAction class
+        self.controller.email = email
+        self.controller.password = password
+        self.controller.engineer = engineer
+
+        #change to PromptAction class frame
         self.controller.show_frame(PromptAction)
-        
+
+    #creates entry field in window
     def make_entry(self, caption, width=None, **options):
         Tk.Label(self, text=caption).pack(side=Tk.TOP)
         entry = Tk.Entry(self, **options)
@@ -78,6 +98,8 @@ class Login(Tk.Frame):
         return entry
 
 class PromptAction(Tk.Frame):
+    #window where user selects to add new part, revise a part, or replace a part
+    
     def __init__(self, parent, controller):
         Tk.Frame.__init__(self, parent)
         
@@ -94,14 +116,7 @@ class PromptAction(Tk.Frame):
         # -------------- end constants ----------------
         self.controller = controller
         self.controller.title('Select Action')
-        self.controller.geometry('150x50')
-        
-        '''self.pack(    ### (4)
-            ipadx=buttons_frame_ipadx,  ### (3)
-            ipady=buttons_frame_ipady,  ### (3)
-            padx=buttons_frame_padx,    ### (3)
-            pady=buttons_frame_pady,    ### (3)
-            ) '''   
+        self.controller.geometry('150x50')   
 
         button1 = Tk.Button(self, command=self.revise, padx=buttons_frame_padx)
         button1.configure(text="Revise Part")
@@ -138,25 +153,45 @@ class PromptAction(Tk.Frame):
         button3.bind("<Return>", self.new_part)
             
     def revise(self):
+        #hide the main window
         self.controller.withdraw()
-        [email, password, engineer] = authenticate()
+        #get part_number, revision and path from user specifying drawing file
         params = get_pdf()
-        params.update(engineer=engineer)
+        params.update(engineer=self.controller.engineer)
         self.controller.destroy()
-        update_part(enter_arena(email, password), **params)
+
+        '''
+        if we have already authenticated email and password by logging into Arena
+        then the browser should be save and we do not have to log in again
+        '''
+        try:
+            update_part(self.controller.browser, **params)
+        except:
+            update_part(enter_arena(self.controller.email, self.controller.password), **params)
     
     def replace(self): 
         self.controller.destroy()
             
     def new_part(self):  
         self.controller.withdraw()
-        [email, password, engineer] = authenticate()
+        #get part_number, revision and path from user specifying drawing file
         params = get_pdf()
+        #get the part name from user directly
         part_name = tkSimpleDialog.askstring('Part Name', 'Enter Part Name')
-        params.update(engineer=engineer)
+
+        #add to params dict to pass to create_part
+        params.update(engineer=self.controller.engineer)
         params.update(part_name=part_name)
         self.controller.destroy()
-        create_part(enter_arena(email, password), **params)
+
+        '''
+        if we have already authenticated email and password by logging into Arena
+        then the browser should be save and we do not have to log in again
+        '''
+        try:
+            create_part(self.controller.browser, **params)
+        except:
+            create_part(enter_arena(self.controller.email, self.controller.password), **params)
 
 def return_user():
     try:
@@ -171,30 +206,6 @@ def return_user():
             return [email, password, engineer]
     except:
         return False
-
-def authenticate():
-    try:
-        with open('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'), 'r') as f:
-            [email, password] = f.read().split('\n')
-            password = xor_crypt_string(password, decode=True)
-    except:
-        email = tkSimpleDialog.askstring('Email', 'Enter Email Used for Arena Login')
-        password = tkSimpleDialog.askstring('Password', 'Enter Arena Password')
-        if not email or not password:
-            show_error('Value Error', 'Please Enter Email and Password')
-        with open('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'), 'w') as f:
-            f.write(email+'\n'+xor_crypt_string(password, encode=True))
-
-    name_hash = {'adhurjaty': 'Anil Dhurjaty', 'rsleiman': 'Richard Sleiman',
-                     'tkanusky': 'Thomas Kanusky', 'pneilson': 'Peter Neilson'}
-
-    engineer = name_hash[email.split('@')[0]]
-    
-    return [email, password, engineer]
-    
-
-def do_something():
-    print 'asdfad'
     
 def get_pdf():
     master = Tk.Tk()
@@ -228,13 +239,13 @@ def enter_arena(email, password):
     br.find_element_by_name('password').send_keys(password)
     br.find_element_by_name('password').submit()
 
-    try:
-        error_info = br.find_element_by_id('loginErrorInfo')
-        os.remove('C:\\Users\\%s\\Documents\\login.dat'%os.environ.get('USERNAME'))
+    
+    error_info = br.find_elements_by_id('loginErrorInfo')
+
+    if error_info:
+        msg = error_info[0].find_element_by_tag_name('li').text
         br.quit()
-        show_error('Login Error', error_info.find_element_by_tag_name('li').text)
-    except:
-        pass
+        show_error('Login Error', msg)
     
     return br
 
@@ -275,7 +286,9 @@ def create_part(br, **properties):
     #check for errors
     edit_errors = br.find_elements_by_id('EditError')
     if edit_errors:
-        show_error('Part Exists Error', edit_errors[0].find_element_by_tag_name('li').text)
+        msg = edit_errors[0].find_element_by_tag_name('li').text
+        br.quit()
+        show_error('Part Exists Error', msg)
 
     #part specs page
     br = go_to_files(br)
@@ -298,7 +311,7 @@ def create_part(br, **properties):
         table = form
     while not table.find_elements_by_name('form_file_identifier'):
         form.find_element_by_name('file_to_upload_0').send_keys(path)
-        #pass
+    
     table.find_element_by_name('form_file_identifier').clear()
     table.find_element_by_name('form_file_identifier').send_keys(part_number)
     table.find_element_by_name('form_edition_identifier').send_keys(revision)
@@ -320,11 +333,9 @@ def update_part(br, **properties):
     br.find_element_by_name('search_textfield').send_keys(part_number)
     br.find_element_by_name('SearchGo').click()
 
-    try: #if there are no items that match part number
-        table = br.find_element_by_id('PbopHeader')
+    error_info = br.find_elements_by_id('PbopHeader')
+    if error_info:
         show_error('Non matching error', 'No item matches that part number')
-    except:
-        pass
     
     if 'list-main' in br.current_url.split('/'): #if return search results
         part_link = br.find_element_by_link_text(part_number).get_attribute('href')
@@ -362,6 +373,10 @@ def completed(title, msg, browser):
 def show_error(title, msg):
     master = Tk.Tk()
     master.withdraw()
+    try:
+        myapp.destroy()
+    except:
+        pass
     tkMessageBox.showerror(title, msg)
     master.destroy()
     sys.exit(1)
