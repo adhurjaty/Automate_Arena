@@ -18,6 +18,10 @@ class Interface(wx.Frame):
         self.prompt_panel.Hide()
         self.verify_panel = Verify(self)
         self.verify_panel.Hide()
+        self.dco_panel = MakeDCO(self)
+        self.dco_panel.Hide()
+
+        self.dco = False #boolean indicating whether to add change to DCO
 
         ret_user = return_user()
         if not ret_user:
@@ -33,6 +37,7 @@ class Interface(wx.Frame):
         self.sizer.Add(self.login_panel, 1, wx.EXPAND)
         self.sizer.Add(self.prompt_panel, 1, wx.EXPAND)
         self.sizer.Add(self.verify_panel, 1, wx.EXPAND)
+        self.sizer.Add(self.dco_panel, 1, wx.EXPAND)
         self.SetSizer(self.sizer)
 
         self.Centre()
@@ -140,6 +145,7 @@ class PromptAction(wx.Panel):
         self.parent.verify_panel.Show()
 
     def replace_part(self, e=None):
+        
         self.parent.Hide()
         self.Hide()
         params = get_pdf(self)
@@ -170,7 +176,7 @@ class Verify(wx.Panel):
         super(Verify, self).__init__(parent)
 
         self.parent = parent
-        self.dco = False
+        self.parent.dco = False
 
     def populate_form(self, new_part=0, **params):
         part_number = params['part_number']
@@ -285,7 +291,20 @@ class Verify(wx.Panel):
         #self.parent.prompt_panel.Show()
         self.params['part_number'] = self.pn_text.GetValue()
         self.params['revision'] = self.rev_text.GetValue()
+        self.params['dco'] = self.parent.dco
 
+        if self.parent.dco:
+            self.parent.Show()
+            self.Hide()
+            self.parent.SetSizeWH(380, 372)
+            self.parent.SetTitle('Specify DCO')
+            self.parent.dco_panel.Show()
+        else:
+            self.execute_action()
+
+    #very hacky solution to allow sequence to be called from MakeDCO class
+    def execute_action(self):
+        br = None
         '''
         if we have already authenticated email and password by logging into Arena
         then the browser should be save and we do not have to log in again
@@ -293,18 +312,18 @@ class Verify(wx.Panel):
         if self.new_part == 1:
             self.params['part_name'] = self.name_text.GetValue()
             try:
-                create_part(self.parent.browser, **self.params)
+                br = create_part(self.parent.browser, **self.params)
             except:
-                create_part(enter_arena(self.parent.email, self.parent.password), **self.params)
+                br = create_part(enter_arena(self.parent.email, self.parent.password), **self.params)
         elif self.new_part == 2:
             
             self.params['part_name'] = self.name_text.GetValue()
             self.params['old_part_number'] = self.rep_text.GetValue()
 
             try:
-                replace_part(self.parent.browser, **self.params)
+                br = replace_part(self.parent.browser, **self.params)
             except:
-                replace_part(enter_arena(self.parent.email, self.parent.password), **self.params)
+                br = replace_part(enter_arena(self.parent.email, self.parent.password), **self.params)
 
             '''
             if we have already authenticated email and password by logging into Arena
@@ -312,15 +331,87 @@ class Verify(wx.Panel):
             '''
         else:
             try:
-                update_part(self.parent.browser, **self.params)
+                br = update_part(self.parent.browser, **self.params)
             except:
-                update_part(enter_arena(self.parent.email, self.parent.password), **self.params)
+                br = update_part(enter_arena(self.parent.email, self.parent.password), **self.params)
 
     def create_dco(self, e):
         if e.GetEventObject().GetValue():
-            self.dco = True
+            self.parent.dco = True
         else:
-            self.dco = False
+            self.parent.dco = False
+
+class MakeDCO(wx.Panel):
+    def __init__(self, parent):
+        super(MakeDCO, self).__init__(parent)
+
+        self.parent = parent
+
+        sizer = wx.GridBagSizer(9, 4)
+
+        text = wx.StaticText(self, label='Add to Existing DCO')
+        sizer.Add(text, pos=(1,0), span=(1,4), flag=wx.ALIGN_CENTER)
+
+        text = wx.StaticText(self, label="DCO Number:")
+        sizer.Add(text, pos=(2, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+
+        self.dco_text = wx.TextCtrl(self)
+        sizer.Add(self.dco_text, pos=(2, 1), span=(1, 4), 
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+
+        text = wx.StaticText(self, label='Create New DCO')
+        sizer.Add(text, pos=(3,0), span=(1,4), flag=wx.ALIGN_CENTER)
+
+        text = wx.StaticText(self, label="DCO Title:")
+        sizer.Add(text, pos=(4, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+
+        self.title_text = wx.TextCtrl(self)
+        sizer.Add(self.title_text, pos=(4, 1), span=(1, 4), 
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+
+        text = wx.StaticText(self, label="Description:")
+        sizer.Add(text, pos=(5, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+
+        self.desc_text = wx.TextCtrl(self, style=wx.TE_MULTILINE)
+        sizer.Add(self.desc_text, pos=(5, 1), span=(2, 4), 
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+
+        buttonOk = wx.Button(self, label="&Ok", size=(90, 28))
+        buttonCancel = wx.Button(self, label="&Cancel", size=(90, 28))
+
+        buttonOk.Bind(wx.EVT_BUTTON, self.click_ok)
+        buttonCancel.Bind(wx.EVT_BUTTON, self.click_cancel)
+        
+        sizer.Add(buttonOk, pos=(8, 3))
+        sizer.Add(buttonCancel, pos=(8, 4), flag=wx.RIGHT|wx.BOTTOM, border=5)
+
+        sizer.AddGrowableCol(1)
+        sizer.AddGrowableRow(6)
+
+        self.SetSizerAndFit(sizer)
+
+    def click_ok(self, e=None):
+        
+        dco_num = self.dco_text.GetValue()
+        dco_title = self.title_text.GetValue()
+        dco_desc = self.desc_text.GetValue()
+        
+        if dco_num:
+            self.parent.verify_panel.params['dco_number'] = dco_num
+        elif dco_title:
+            self.parent.verify_panel.params['dco_title'] = dco_title
+            self.parent.verify_panel.params['dco_desc'] = dco_desc
+        else:
+            self.parent.dco = False
+
+        self.parent.Hide()
+        self.parent.verify_panel.execute_action()
+
+    def click_cancel(self, e=None):
+        self.parent.dco = False
+        self.Hide()
+        self.parent.SetTitle('Select Action')
+        self.parent.verify_panel.Show()
 
 def return_user():
     try:
@@ -452,6 +543,8 @@ def create_part(br, **properties):
             break
     form.find_element_by_name('submitFileForm').click()
     
+    create_dco(br, **properties)
+    
     completed('Item Created', 'Successfully Created Item', br)
     
 def update_part(br, **properties):
@@ -510,10 +603,72 @@ def replace_part(br, **properties):
             item.send_keys('X'+part_number)
             break
 
+    #make sure all required drop-down menus have values to prevent errors
+    div = form.find_element_by_id('attsCatDriven')
+    for sel in div.find_elements_by_tag_name('select'):
+        for val in sel.find_elements_by_tag_name('option'):
+            if val.text == 'No':
+                val.click()
+                break
+
     form.find_element_by_name('submit').click()
     #</obsolete item>
 
     create_part(br, **properties)
+
+def create_dco(br, **properties):
+    title = properties['dco_title']
+    description = properties['dco_desc']
+    revision = properties['revision']
+    engineer = properties['engineer']
+
+    br.get(br.find_element_by_id('revBarCommandBtnContainer').
+           find_element_by_link_text('Add to Change').get_attribute('href'))
+    br.find_element_by_id('MultiPartAction_CreateNewChange').\
+        find_element_by_name('submitForm').click()
+
+    form = br.find_element_by_id('MultiPartAction_DataEntryForm')
+    form.find_element_by_id('DCO-(# auto generated)').click()
+    form.find_element_by_name('form_change_title').send_keys(title)
+    form.find_element_by_id('formChangeDesc').send_keys(description)
+
+    for opt in form.find_element_by_name('form_routings').find_elements_by_tag_name('option'):
+        if opt.get_attribute('value') == '22518':
+            opt.click()
+            break
+
+    form.find_element_by_name('form_custom_45976').send_keys(engineer)
+    form.find_element_by_name('submit').click()
+
+    #specify items page
+    br.find_element_by_name('submitForm').click()
+
+    #select actions page
+    br.find_element_by_name('submitForm').click()
+
+    #enter revision page
+    form = br.find_element_by_id('MultiPartAction_DataEntryForm')
+    
+    body = form
+    'element tbody that I need to work with is 2 tbodies deep'
+    for i in xrange(2):
+        body = body.find_element_by_tag_name('tbody')
+
+    for td in body.find_elements_by_tag_name('td'):
+        if td.get_attribute('name') and 'form_version_num_' in td.get_attribute('name'):
+            td.send_keys(revision)
+            break
+
+    for box in body.find_elements_by_tag_name('input'):
+        if box.get_attribute('name') and 'form_version_views_' in box.get_attribute('name'):
+            box.click()
+
+    try:
+        form.find_element_by_name('submitForm').click()
+    except:
+        br.find_element_by_name('submitForm').click()
+        print 'Not in form'
+    
 
 def go_to_tab(br, tab):
     lst = br.find_element_by_id('views')
@@ -565,20 +720,22 @@ def working_rev(br):
     return br
     
 def show_error(title, msg):
+    wx.MessageBox(msg, title, wx.OK|wx.ICON_ERROR)
     try:
         app.Close()
     except:
         pass
-    wx.MessageBox(msg, title, wx.OK|wx.ICON_ERROR)
     sys.exit(1)
 
 def completed(title, msg, browser):
     browser.quit()
+    wx.MessageBox(msg, title, wx.OK|wx.ICON_INFORMATION)
+    app.Close()
     try:
         app.Close()
     except:
+        print "Can't close app"
         pass
-    wx.MessageBox(msg, title, wx.OK|wx.ICON_INFORMATION)
 
 def xor_crypt_string(data, key='adhurjaty', encode=False, decode=False):
     if decode:
