@@ -557,12 +557,10 @@ def create_part(br, **properties):
     form.find_element_by_name('submitFileForm').click()
 
     if properties['dco']:
-        try:
-            if properties['dco_title']:
-                create_dco(br, **properties)
-        except:
-            if properties['dco_number']:
-                add_to_dco(br, **properties)
+        if 'dco_title' in properties.keys():
+            create_dco(br, **properties)
+        if 'dco_number' in properties.keys():
+            add_to_dco(br, **properties)
             
     completed('Item Created', 'Successfully Created Item', br)
     
@@ -593,12 +591,10 @@ def update_part(br, **properties):
     add_file(form, path, part_number, revision, engineer)
 
     if properties['dco']:
-        try:
-            if properties['dco_title']:
-                create_dco(br, **properties)
-        except:
-            if properties['dco_number']:
-                add_to_dco(br, **properties)
+        if 'dco_title' in properties.keys():
+            create_dco(br, **properties)
+        if 'dco_number' in properties.keys():
+            add_to_dco(br, **properties)
         
     completed('Item Revised', 'Successfully Revised Item', br)
 
@@ -782,22 +778,21 @@ def finish_dco(br, **properties):
     
     #enter revision page
     form = br.find_element_by_id('MultiPartAction_DataEntryForm')
-    
-    body = form
-    'element tbody that I need to work with is 2 tbodies deep'
-    for i in xrange(2):
-        body = body.find_element_by_tag_name('tbody')
 
-    for td in body.find_elements_by_tag_name('td'):
-        if td.get_attribute('name') and 'form_version_num_' in td.get_attribute('name'):
-            td.send_keys(revision)
+    for val in form.find_elements_by_tag_name('input'):
+        if 'form_version_num_' in val.get_attribute('name'):
+            val.send_keys(revision)
             break
 
-    for box in body.find_elements_by_tag_name('input'):
-        if box.get_attribute('name') and 'form_version_views_' in box.get_attribute('name'):
+    for box in form.find_elements_by_tag_name('input'):
+        if box.get_attribute('name') and 'form_version_views_'\
+           in box.get_attribute('name') and not box.is_selected():
             box.click()
 
     form.find_element_by_name('submitForm').click()
+
+    if br.find_elements_by_id('EditError'):
+        show_error('DCO Error', br.find_element_by_id('EditError').find_element_by_tag_name('li').text)
 
     return br
 
@@ -845,7 +840,7 @@ def search_item(br, pn):
 def working_rev(br):
     revs = br.find_element_by_name('display_revision')
     for r in revs.find_elements_by_tag_name('option'):
-        if r.text == 'Working Revision':
+        if 'Working Revision' in r.text:
             r.click() #select working revision for part
             break
     return br
