@@ -636,17 +636,19 @@ def replace_part(br, **properties):
                 break
 
     form.find_element_by_name('submit').click()
+
+    if br.find_elements_by_id('EditError'):
+        show_error('Existing part error',
+                   br.find_element_by_id('EditError').find_element_by_tag_name('li').text)
     #</obsolete item>
 
     if properties['dco']:
-        try:
-            if properties['dco_title']:
-                [br, dco_number] = new_obsolete_dco(br, **properties)
-                properties['dco_title'] = ''
-                properties['dco_number'] = dco_number
-        except:
-            if properties['dco_number']:
-                br = open_obsolete_dco(br, **properties)
+        if 'dco_title' in properties.keys():
+            [br, dco_number] = new_obsolete_dco(br, **properties)
+            del properties['dco_title']
+            properties['dco_number'] = dco_number
+        elif 'dco_number' in properties.keys():
+            br = open_obsolete_dco(br, **properties)
 
     create_part(br, **properties)
 
@@ -655,6 +657,12 @@ def create_dco(br, **properties):
     br = go_to_actions_dco(br, **properties)
 
     #select actions page
+    table = br.find_element_by_id('MultiPartAction_DataEntryForm')
+    for cb in table.find_elements_by_tag_name('input'):
+        if 'Release to Production' in cb.find_element_by_xpath('../..').text\
+           and cb.get_attribute('type') != 'hidden':
+            cb.click()
+    
     br.find_element_by_name('submitForm').click()
 
     finish_dco(br, **properties)
@@ -681,6 +689,12 @@ def add_to_dco(br, **properties):
     br.find_element_by_id('MultiPartAction_FindChange').find_element_by_name('submitForm').click()
 
     #select actions page
+    table = br.find_element_by_id('MultiPartAction_DataEntryForm')
+    for cb in table.find_elements_by_tag_name('input'):
+        if 'Release to Production' in cb.find_element_by_xpath('../..').text\
+           and cb.get_attribute('type') != 'hidden':
+            cb.click()
+            
     br.find_element_by_name('submitForm').click()
 
     finish_dco(br, **properties)
@@ -696,11 +710,14 @@ def new_obsolete_dco(br, **properties):
         if 'Deprecate Item' in td.text:
             td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
             td.find_element_by_tag_name('input').click()
+
+    br.find_element_by_name('submitForm').click()
     
     br = finish_dco(br, **properties)
 
     dco_number = br.find_element_by_id('ObjectHeader').find_element_by_tag_name('h4').text.split('#')[-1]
-
+    dco_number = dco_number.split(' ')[0]
+    
     #go back to items page
     br.get(br.find_element_by_link_text('Production Workspace Items').get_attribute('href'))
 
@@ -734,6 +751,8 @@ def open_obsolete_dco(br, **properties):
         if 'Deprecate Item' in td.text:
             td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
             td.find_element_by_tag_name('input').click()
+
+    br.find_element_by_name('submitForm').click()
     
     br = finish_dco(br, **properties)
 
@@ -768,7 +787,13 @@ def go_to_actions_dco(br, **properties):
     form.find_element_by_name('submit').click()
 
     #specify items page
-    br.find_element_by_name('submitForm').click()
+    while True:
+        try:
+            br.find_element_by_name('submitForm').click()
+            break
+        except:
+            pass
+    
 
     return br
 
@@ -786,10 +811,11 @@ def finish_dco(br, **properties):
 
     for box in form.find_elements_by_tag_name('input'):
         if box.get_attribute('name') and 'form_version_views_'\
-           in box.get_attribute('name') and not box.is_selected():
+           in box.get_attribute('name') and not box.is_selected()\
+           and box.get_attribute('type') != 'hidden':
             box.click()
 
-    form.find_element_by_name('submitForm').click()
+    br.find_element_by_name('submitForm').click()
 
     if br.find_elements_by_id('EditError'):
         show_error('DCO Error', br.find_element_by_id('EditError').find_element_by_tag_name('li').text)
@@ -847,20 +873,14 @@ def working_rev(br):
     
 def show_error(title, msg):
     wx.MessageBox(msg, title, wx.OK|wx.ICON_ERROR)
-    try:
-        app.Destroy()
-    except:
-        pass
+    app.Destroy()
     sys.exit(1)
 
 def completed(title, msg, browser):
     browser.quit()
     wx.MessageBox(msg, title, wx.OK|wx.ICON_INFORMATION)
-    try:
-        app.Destroy()
-    except:
-        print "Can't close app"
-        pass
+    app.Destroy()
+
 
 def xor_crypt_string(data, key='adhurjaty', encode=False, decode=False):
     if decode:
