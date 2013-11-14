@@ -5,6 +5,19 @@ import sys
 from itertools import izip, cycle
 import base64
 
+'''
+Params/Properties Dictionary keys:
+part_number
+revision
+part_name
+old_part_number
+engineer
+dco
+dco_title
+dco_desc
+dco_number
+'''
+
 class Interface(wx.Frame):
 
     def __init__(self, parent, title):
@@ -542,9 +555,15 @@ def create_part(br, **properties):
             a.click()
             break
     form.find_element_by_name('submitFileForm').click()
-    
-    create_dco(br, **properties)
-    
+
+    if properties['dco']:
+        try:
+            if properties['dco_title']:
+                create_dco(br, **properties)
+        except:
+            if properties['dco_number']:
+                add_to_dco(br, **properties)
+            
     completed('Item Created', 'Successfully Created Item', br)
     
 def update_part(br, **properties):
@@ -572,6 +591,15 @@ def update_part(br, **properties):
             o.click()
 
     add_file(form, path, part_number, revision, engineer)
+
+    if properties['dco']:
+        try:
+            if properties['dco_title']:
+                create_dco(br, **properties)
+        except:
+            if properties['dco_number']:
+                add_to_dco(br, **properties)
+        
     completed('Item Revised', 'Successfully Revised Item', br)
 
 def replace_part(br, **properties):
@@ -614,14 +642,117 @@ def replace_part(br, **properties):
     form.find_element_by_name('submit').click()
     #</obsolete item>
 
+    if properties['dco']:
+        try:
+            if properties['dco_title']:
+                [br, dco_number] = new_obsolete_dco(br, **properties)
+                properties['dco_title'] = ''
+                properties['dco_number'] = dco_number
+        except:
+            if properties['dco_number']:
+                br = open_obsolete_dco(br, **properties)
+
     create_part(br, **properties)
 
 def create_dco(br, **properties):
+
+    br = go_to_actions_dco(br, **properties)
+
+    #select actions page
+    br.find_element_by_name('submitForm').click()
+
+    finish_dco(br, **properties)
+
+def add_to_dco(br, **properties):
+    dco_number = properties['dco_number']
+    revision = properties['revision']
+    engineer = properties['engineer']
+
+    br.get(br.find_element_by_id('revBarCommandBtnContainer').
+           find_element_by_link_text('Add to Change').get_attribute('href'))
+    table = br.find_element_by_id('topTTable')
+
+    found_dco = False
+    for links in table.find_elements_by_tag_name('a'):
+        if dco_number in links.text:
+            links.find_element_by_xpath('../..').find_element_by_name('top_checkbox').click()
+            found_dco = True
+            break
+
+    if not found_dco:
+        show_error('Invalid DCO', 'DCO number is invalid')
+    
+    br.find_element_by_id('MultiPartAction_FindChange').find_element_by_name('submitForm').click()
+
+    #select actions page
+    br.find_element_by_name('submitForm').click()
+
+    finish_dco(br, **properties)
+
+def new_obsolete_dco(br, **properties):
+
+    br = go_to_actions_dco(br, **properties)
+
+    #select actions page
+    table = br.find_element_by_id('MultiPartAction_DataEntryForm')
+
+    for td in table.find_elements_by_tag_name('td'):
+        if 'Deprecate Item' in td.text:
+            td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
+            td.find_element_by_tag_name('input').click()
+    
+    br = finish_dco(br, **properties)
+
+    dco_number = br.find_element_by_id('ObjectHeader').find_element_by_tag_name('h4').text.split('#')[-1]
+
+    #go back to items page
+    br.get(br.find_element_by_link_text('Production Workspace Items').get_attribute('href'))
+
+    return br, dco_number
+
+def open_obsolete_dco(br, **properties):
+    dco_number = properties['dco_number']
+    revision = properties['revision']
+    engineer = properties['engineer']
+
+    br.get(br.find_element_by_id('revBarCommandBtnContainer').
+           find_element_by_link_text('Add to Change').get_attribute('href'))
+    table = br.find_element_by_id('topTTable')
+
+    found_dco = False
+    for links in table.find_elements_by_tag_name('a'):
+        if dco_number in links.text:
+            links.find_element_by_xpath('../..').find_element_by_name('top_checkbox').click()
+            found_dco = True
+            break
+
+    if not found_dco:
+        show_error('Invalid DCO', 'DCO number is invalid')
+    
+    br.find_element_by_id('MultiPartAction_FindChange').find_element_by_name('submitForm').click()
+
+    #select actions page
+    table = br.find_element_by_id('MultiPartAction_DataEntryForm')
+
+    for td in table.find_elements_by_tag_name('td'):
+        if 'Deprecate Item' in td.text:
+            td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
+            td.find_element_by_tag_name('input').click()
+    
+    br = finish_dco(br, **properties)
+
+    #go back to items page
+    br.get(br.find_element_by_link_text('Production Workspace Items').get_attribute('href'))
+
+    return br
+
+def go_to_actions_dco(br, **properties):
     title = properties['dco_title']
     description = properties['dco_desc']
     revision = properties['revision']
     engineer = properties['engineer']
 
+    #select Add to Change button on parts page
     br.get(br.find_element_by_id('revBarCommandBtnContainer').
            find_element_by_link_text('Add to Change').get_attribute('href'))
     br.find_element_by_id('MultiPartAction_CreateNewChange').\
@@ -643,9 +774,12 @@ def create_dco(br, **properties):
     #specify items page
     br.find_element_by_name('submitForm').click()
 
-    #select actions page
-    br.find_element_by_name('submitForm').click()
+    return br
 
+def finish_dco(br, **properties):
+    revision = properties['revision']
+    engineer = properties['engineer']
+    
     #enter revision page
     form = br.find_element_by_id('MultiPartAction_DataEntryForm')
     
@@ -663,12 +797,9 @@ def create_dco(br, **properties):
         if box.get_attribute('name') and 'form_version_views_' in box.get_attribute('name'):
             box.click()
 
-    try:
-        form.find_element_by_name('submitForm').click()
-    except:
-        br.find_element_by_name('submitForm').click()
-        print 'Not in form'
-    
+    form.find_element_by_name('submitForm').click()
+
+    return br
 
 def go_to_tab(br, tab):
     lst = br.find_element_by_id('views')
@@ -722,7 +853,7 @@ def working_rev(br):
 def show_error(title, msg):
     wx.MessageBox(msg, title, wx.OK|wx.ICON_ERROR)
     try:
-        app.Close()
+        app.Destroy()
     except:
         pass
     sys.exit(1)
@@ -730,9 +861,8 @@ def show_error(title, msg):
 def completed(title, msg, browser):
     browser.quit()
     wx.MessageBox(msg, title, wx.OK|wx.ICON_INFORMATION)
-    app.Close()
     try:
-        app.Close()
+        app.Destroy()
     except:
         print "Can't close app"
         pass
