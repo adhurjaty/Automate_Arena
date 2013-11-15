@@ -706,10 +706,10 @@ def new_obsolete_dco(br, **properties):
     #select actions page
     table = br.find_element_by_id('MultiPartAction_DataEntryForm')
 
-    for td in table.find_elements_by_tag_name('td'):
-        if 'Deprecate Item' in td.text:
-            td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
-            td.find_element_by_tag_name('input').click()
+    for cb in table.find_elements_by_tag_name('input'):
+        if 'Deprecate Item' in cb.find_element_by_xpath('../..').text\
+           and cb.get_attribute('type') != 'hidden':
+            cb.click()
 
     br.find_element_by_name('submitForm').click()
     
