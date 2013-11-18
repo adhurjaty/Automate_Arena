@@ -277,7 +277,7 @@ class Verify(wx.Panel):
         sizer.Add(self.file_text, pos=(rows-4, 1), span=(1, 4), 
             flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
-        cb = wx.CheckBox(self, label='Create DCO')
+        cb = wx.CheckBox(self, label='Add to DCO')
         cb.Bind(wx.EVT_CHECKBOX, self.create_dco)
         sizer.Add(cb, pos=(rows-3,0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=10)
 
@@ -747,10 +747,10 @@ def open_obsolete_dco(br, **properties):
     #select actions page
     table = br.find_element_by_id('MultiPartAction_DataEntryForm')
 
-    for td in table.find_elements_by_tag_name('td'):
-        if 'Deprecate Item' in td.text:
-            td.find_element_by_xpath('..').find_element_by_tag_name('input').click()
-            td.find_element_by_tag_name('input').click()
+    for cb in table.find_elements_by_tag_name('input'):
+        if 'Deprecate Item' in cb.find_element_by_xpath('../..').text\
+           and cb.get_attribute('type') != 'hidden':
+            cb.click()
 
     br.find_element_by_name('submitForm').click()
     
@@ -858,8 +858,10 @@ def search_item(br, pn):
         show_error('Non matching error', 'No item matches that part number')
 
     if 'list-main' in br.current_url.split('/'): #if return search results
-        part_link = br.find_element_by_link_text(part_number).get_attribute('href')
-        br.get(part_link) #go to first item in list
+        for link in br.find_elements_by_tag_name('a'):
+            if pn in link.text:
+                br.get(link.get_attribute('href')) #go to first item in list
+                break
 
     return br
 
