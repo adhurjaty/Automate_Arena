@@ -4,6 +4,7 @@ import os
 import sys
 from itertools import izip, cycle
 import base64
+import re
 
 '''
 Params/Properties Dictionary keys:
@@ -20,11 +21,12 @@ dco_number
 
 class Interface(wx.Frame):
 
-    def __init__(self, parent, title):
+    def __init__(self, parent, title, debug=False):
         
         super(Interface, self).__init__(parent, title=title,
                                         size=(350, 175))
 
+        self.debug = debug
         self.login_panel = Login(self)
         self.login_panel.Hide()
         self.prompt_panel = PromptAction(self)
@@ -41,7 +43,10 @@ class Interface(wx.Frame):
             self.SetTitle('Login')
             self.login_panel.Show()
         else:
-            self.SetSizeWH(295, 70)
+            if debug:
+                self.SetSizeWH(400, 70)
+            else:
+                self.SetSizeWH(295, 70)
             [self.email, self.password, self.engineer] = ret_user
             self.SetTitle('Select Action')
             self.prompt_panel.Show()
@@ -128,7 +133,10 @@ class PromptAction(wx.Panel):
 
         self.parent = parent
 
-        sizer = wx.GridBagSizer(1, 3)
+        if parent.debug:
+            sizer = wx.GridBagSizer(1, 4)
+        else:
+            sizer = wx.GridBagSizer(1, 3)
         
         revise = wx.Button(self, label='Revise Part', size=(90, 28))
         revise.Bind(wx.EVT_BUTTON, self.revise_part)
@@ -142,6 +150,12 @@ class PromptAction(wx.Panel):
         sizer.AddMany([(revise, (0,0)), (replace, (0,1)),
                        (new, (0,2))])
         
+        if parent.debug:
+            test = wx.Button(self, label='Test', size=(90, 28))
+            test.Bind(wx.EVT_BUTTON, self.test_button)
+
+            sizer.Add(test, (0, 3))
+        
         sizer.AddGrowableRow(0)
         self.SetSizerAndFit(sizer)
         
@@ -153,7 +167,7 @@ class PromptAction(wx.Panel):
         params.update(engineer=self.parent.engineer)
         self.parent.verify_panel.populate_form(**params)
         self.parent.SetTitle('Verify')
-        self.parent.SetSizeWH(355, 300)
+        self.parent.SetSizeWH(405, 330)
         self.parent.Show()
         self.parent.verify_panel.Show()
 
@@ -165,7 +179,7 @@ class PromptAction(wx.Panel):
         params.update(engineer=self.parent.engineer)
         self.parent.verify_panel.populate_form(2, **params)
         self.parent.SetTitle('Verify')
-        self.parent.SetSizeWH(380, 372)
+        self.parent.SetSizeWH(430, 400)
         self.parent.Show()
         self.parent.verify_panel.Show()
 
@@ -180,9 +194,20 @@ class PromptAction(wx.Panel):
 
         self.parent.SetTitle('Verify')
         self.parent.verify_panel.populate_form(1, **params)
-        self.parent.SetSizeWH(355, 335)
+        self.parent.SetSizeWH(405, 365)
         self.parent.Show()
         self.parent.verify_panel.Show()
+
+    def test_button(self, e=None):
+        chromedriver = os.path.join(os.getcwd(), 'chrome\\chromedriver')
+        os.environ['webdriver.chrome.driver'] = chromedriver
+        br = webdriver.Chrome(chromedriver)
+        br.get('http://www.reddit.com')
+        links = [link.get_attribute('href') for link in br.find_elements_by_tag_name('a') if 'over' in link.text] 
+
+        for link in links:
+            br.get(link)
+            a = raw_input('hit enter: ')
 
 class Verify(wx.Panel):
     def __init__(self, parent):
@@ -198,12 +223,7 @@ class Verify(wx.Panel):
         path = params['path']
         self.params = params
         self.new_part = new_part
-        rows = 8
-
-        if new_part == 1:
-            rows = 9
-        if new_part == 2:
-            rows = 10
+        rows = 9 + new_part
 
         sizer = wx.GridBagSizer(rows, 4)
 
@@ -223,14 +243,6 @@ class Verify(wx.Panel):
             sizer.Add(self.pn_text, pos=(2, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
-            text = wx.StaticText(self, label="Revision:")
-            sizer.Add(text, pos=(3, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
-
-            self.rev_text = wx.TextCtrl(self)
-            self.rev_text.WriteText(revision)
-            sizer.Add(self.rev_text, pos=(3, 1), span=(1, 4), 
-                flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-
         else:
             text = wx.StaticText(self, label="Part Number:")
             sizer.Add(text, pos=(1, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
@@ -240,46 +252,62 @@ class Verify(wx.Panel):
             sizer.Add(self.pn_text, pos=(1, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
-            text = wx.StaticText(self, label="Revision:")
-            sizer.Add(text, pos=(2, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+        text = wx.StaticText(self, label="Revision:")
+        sizer.Add(text, pos=(rows-8, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
-            self.rev_text = wx.TextCtrl(self)
-            self.rev_text.WriteText(revision)
-            sizer.Add(self.rev_text, pos=(2, 1), span=(1, 4), 
-                flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+        self.rev_text = wx.TextCtrl(self)
+        self.rev_text.WriteText(revision)
+        sizer.Add(self.rev_text, pos=(rows-8, 1), span=(1, 4), 
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
         if new_part:
-            opt = ''
-            position = 3
-            if new_part == 2:
-                opt = ' (optional)'
-                position = 4
+            opt = ' (optional)' if new_part == 2 else ''
             text = wx.StaticText(self, label="Part Name%s:"%opt)
-            sizer.Add(text, pos=(position, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+            sizer.Add(text, pos=(rows-7, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
             self.name_text = wx.TextCtrl(self)
-            sizer.Add(self.name_text, pos=(position, 1), span=(1, 4), 
+            sizer.Add(self.name_text, pos=(rows-7, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
         text = wx.StaticText(self, label="Engineer Name:")
-        sizer.Add(text, pos=(rows-5, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+        sizer.Add(text, pos=(rows-6, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
         self.eng_text = wx.TextCtrl(self)
         self.eng_text.WriteText(engineer)
-        sizer.Add(self.eng_text, pos=(rows-5, 1), span=(1, 4), 
+        sizer.Add(self.eng_text, pos=(rows-6, 1), span=(1, 4), 
             flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
         text = wx.StaticText(self, label="File:")
-        sizer.Add(text, pos=(rows-4, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+        sizer.Add(text, pos=(rows-5, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
-        self.file_text = wx.TextCtrl(self)
-        self.file_text.WriteText(path)
-        sizer.Add(self.file_text, pos=(rows-4, 1), span=(1, 4), 
+        #self.file_text = wx.TextCtrl(self)
+        #self.file_text.WriteText(path)
+        self.file_text = wx.StaticText(self, label=path.split('\\')[-1])
+        sizer.Add(self.file_text, pos=(rows-5, 1), span=(1, 2), 
             flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+
+        self.browse_button = wx.Button(self, label='Browse...', size = (75, 24))
+        self.browse_button.Bind(wx.EVT_BUTTON, self.click_browse)
+        sizer.Add(self.browse_button, pos=(rows-5, 3), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+
+        self.image_text = wx.StaticText(self, label='Add Image (optional): ')
+        sizer.Add(self.image_text, pos=(rows-4, 0), flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+
+        self.image_button = wx.Button(self, label='Browse...', size = (75, 24))
+        self.image_button.Bind(wx.EVT_BUTTON, self.image_browse)
+        sizer.Add(self.image_button, pos=(rows-4, 1), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
+
+        try:
+            self.image_path = wx.StaticText(self, label=self.params['image'].split('\\')[-1])
+            sizer.Add(self.image_path, pos=(rows-4, 2), span=(1, 2), 
+                flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+        except:
+            pass
 
         cb = wx.CheckBox(self, label='Add to DCO')
         cb.Bind(wx.EVT_CHECKBOX, self.create_dco)
         sizer.Add(cb, pos=(rows-3,0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=10)
+
 
         buttonOk = wx.Button(self, label="&Ok", size=(90, 28))
         buttonClose = wx.Button(self, label="&Close", size=(90, 28))
@@ -287,13 +315,13 @@ class Verify(wx.Panel):
         buttonOk.Bind(wx.EVT_BUTTON, self.click_ok)
         buttonClose.Bind(wx.EVT_BUTTON, self.click_close)
         
-        sizer.Add(buttonOk, pos=(rows-1, 3))
-        sizer.Add(buttonClose, pos=(rows-1, 4), flag=wx.RIGHT|wx.BOTTOM, border=5)
+        sizer.Add(buttonOk, pos=(rows-2, 3))
+        sizer.Add(buttonClose, pos=(rows-2, 4), flag=wx.RIGHT|wx.BOTTOM, border=5)
 
         sizer.AddGrowableCol(1)
-        sizer.AddGrowableRow(rows-2)
+        sizer.AddGrowableRow(rows-3)
 
-        self.SetSizerAndFit(sizer)
+        self.SetSizerAndFit(sizer, True)
 
     def click_close(self, e=None):
         self.parent.Close(True)
@@ -315,38 +343,46 @@ class Verify(wx.Panel):
         else:
             self.execute_action()
 
-    #very hacky solution to allow sequence to be called from MakeDCO class
+    def click_browse(self, e=None):
+        properties = get_pdf(self)
+        self.params.update(properties)
+        self.populate_form(self.new_part, **self.params)
+
+    def image_browse(self, e=None):
+        dlg = wx.FileDialog(self, 'Choose Part Image',
+                            'M:\\Drawings\\Inventor part no 16xxxx',
+                            '', 'JPEG or PNG (*.jpg *.png)|*.jpg;*.png;*.bmp')
+    
+        if dlg.ShowModal() == wx.ID_OK:
+            filename = dlg.GetFilename()
+            path = os.path.join(dlg.GetDirectory(), filename)
+            path = path.replace('/','\\')
+            self.params.update(image=path)
+            self.populate_form(self.new_part, **self.params)
+
+    #allows sequence to be called from MakeDCO class
     def execute_action(self):
         br = None
+        try:
+            br = self.parent.browser
+        except:
+            pass
+        part_fnc = {0: update_part, 1: create_part, 2: replace_part}
+        
         '''
         if we have already authenticated email and password by logging into Arena
         then the browser should be save and we do not have to log in again
         '''
-        if self.new_part == 1:
+        if self.new_part:
             self.params['part_name'] = self.name_text.GetValue()
-            try:
-                br = create_part(self.parent.browser, **self.params)
-            except:
-                br = create_part(enter_arena(self.parent.email, self.parent.password), **self.params)
-        elif self.new_part == 2:
             
-            self.params['part_name'] = self.name_text.GetValue()
+        if self.new_part == 2:
             self.params['old_part_number'] = self.rep_text.GetValue()
 
-            try:
-                br = replace_part(self.parent.browser, **self.params)
-            except:
-                br = replace_part(enter_arena(self.parent.email, self.parent.password), **self.params)
-
-            '''
-            if we have already authenticated email and password by logging into Arena
-            then the browser should be save and we do not have to log in again
-            '''
+        if br:
+            br = part_fnc[self.new_part](br, **self.params)
         else:
-            try:
-                br = update_part(self.parent.browser, **self.params)
-            except:
-                br = update_part(enter_arena(self.parent.email, self.parent.password), **self.params)
+            br = part_fnc[self.new_part](enter_arena(self.parent.email, self.parent.password), **self.params)
 
     def create_dco(self, e):
         if e.GetEventObject().GetValue():
@@ -456,7 +492,7 @@ def get_pdf(parent):
         revision = filename[-1].split('.')[0] #last is revision, remove '.pdf'
     
         options = False
-        if len(filename) > 3: #if the part has -XX options, set option flag to true
+        if len(filename) == 3: #if the part has -XX options, set option flag to true
             options = True
         
         return dict(part_number=part_number, revision=revision, path=path, options=options)
@@ -473,9 +509,7 @@ def enter_arena(email, password):
     br.find_element_by_name('password').send_keys(password)
     br.find_element_by_name('password').submit()
 
-    
     error_info = br.find_elements_by_id('loginErrorInfo')
-
     if error_info:
         msg = error_info[0].find_element_by_tag_name('li').text
         br.quit()
@@ -491,18 +525,16 @@ def create_part(br, **properties):
     path = properties['path']
     
     #items page
-    new_part_link = br.find_element_by_link_text('New Item').get_attribute('href')
-    br.get(new_part_link)
+    br.get(br.find_element_by_link_text('New Item').get_attribute('href'))
     
     #input part information page
     form = br.find_element_by_name('DataEntryForm')
-    category = form.find_element_by_name('form_category_id')
-    for option in category.find_elements_by_tag_name('option'):
-        if option.text == 'Part':
-            option.click()
+    
+    click_in_list(form.find_element_by_name('form_category_id'), 'option', 'Part')
+    
             
-    item_number_fields = form.find_elements_by_name('format_field_values')
-    for item in item_number_fields: #search through elements whose name is 'format_field_values'
+    #search through elements whose name is 'format_field_values'
+    for item in form.find_elements_by_name('format_field_values'): 
         if item.is_displayed: #and if the field is diplayed, enter part number in field
             item.send_keys(part_number)
             break
@@ -510,10 +542,8 @@ def create_part(br, **properties):
     form.find_element_by_name('form_version').send_keys(revision)
     form.find_element_by_name('form_item_name').send_keys(part_name)
     
-    engineers = form.find_element_by_name('form_engineer')
-    for e in engineers.find_elements_by_tag_name('option'):
-        if e.text == engineer:
-            e.click()
+    click_in_list(form.find_element_by_name('form_engineer'), 'option', engineer)
+    
     form.find_elements_by_name('form_off_the_shelf_p')[1].click() #click Made-to-Specification
     form.submit()
 
@@ -522,17 +552,22 @@ def create_part(br, **properties):
     if edit_errors:
         msg = edit_errors[0].find_element_by_tag_name('li').text
         br.quit()
-        show_error('Part Exists Error', msg)
+        show_error('Part Exists Error', msg, br)
 
     #part specs page
+    #<add image>
+    '''
+    if 'image' in properties.keys():
+        click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
+        table.find_element_by_name('form_image_file_name').clear()
+        table.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+    '''
+    #</add image>
+    
     br = go_to_tab(br, 'Files')
 
     #files page
-    add_file = br.find_element_by_id('AttachHeaderCommands')
-    for val in add_file.find_elements_by_tag_name('td'):
-        if val.text == 'Add New Files':
-            val.click()
-            break
+    click_in_list(br.find_element_by_id('AttachHeaderCommands'), 'td', 'Add New Files')
     
     #add files page
     form = br.find_element_by_id('MultiPartAction_DataEntryForm')
@@ -549,18 +584,12 @@ def create_part(br, **properties):
     table.find_element_by_name('form_file_identifier').clear()
     table.find_element_by_name('form_file_identifier').send_keys(part_number)
     table.find_element_by_name('form_edition_identifier').send_keys(revision)
-    authors = table.find_element_by_name('form_file_author')
-    for a in authors.find_elements_by_tag_name('option'):
-        if a.text == engineer:
-            a.click()
-            break
+
+    click_in_list(table.find_element_by_name('form_file_author'), 'option', engineer)
+    
     form.find_element_by_name('submitFileForm').click()
 
-    if properties['dco']:
-        if 'dco_title' in properties.keys():
-            create_dco(br, **properties)
-        if 'dco_number' in properties.keys():
-            add_to_dco(br, **properties)
+    check_dco(br, **properties)
             
     completed('Item Created', 'Successfully Created Item', br)
     
@@ -574,10 +603,18 @@ def update_part(br, **properties):
     br = search_item(br, part_number)
 
     #part page
+    br = working_rev(br) #go to working revision in drop-down
+    br = go_to_tab(br, 'Specs')
+    #<add image>
+    if 'image' in properties.keys():
+        click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
+        table.find_element_by_name('form_image_file_name').clear()
+        table.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+    #</add image>
+    
     br = go_to_tab(br, 'Files')
 
     #files page
-    br = working_rev(br) #go to working revision in drop-down
     
     br.get(br.find_element_by_link_text('Update').get_attribute('href'))
 
@@ -587,14 +624,11 @@ def update_part(br, **properties):
     for o in ops:
         if o.get_attribute('value') == '0':
             o.click()
+            break
 
     add_file(form, path, part_number, revision, engineer)
 
-    if properties['dco']:
-        if 'dco_title' in properties.keys():
-            create_dco(br, **properties)
-        if 'dco_number' in properties.keys():
-            add_to_dco(br, **properties)
+    check_dco(br, **properties)
         
     completed('Item Revised', 'Successfully Revised Item', br)
 
@@ -606,18 +640,23 @@ def replace_part(br, **properties):
 
     #<obsolete item>
     br = search_item(br, part_number)
+
+    'get revision letter from soon-to-be-deprecated part'
+    old_rev = next((re.search('[0-9A-Z]', o.text).group(0)
+                    for o in br.find_element_by_id('screen-text').find_elements_by_tag_name('option')
+                    if 'Working' not in o.text))
+    
+    'go to working revision'
     br = working_rev(br)
+    'go to specs tab'
     br = go_to_tab(br, 'Specs')
 
     if not properties['part_name']:
         div = br.find_element_by_id('object-header')
         properties['part_name'] = div.find_element_by_tag_name('h2').text
 
-    edit_specs = br.find_element_by_id('SpecHeaderEditItemLink')
-    for val in edit_specs.find_elements_by_tag_name('td'):
-        if val.text == 'Edit Information':
-            val.click()
-            break
+
+    click_in_list(br.find_element_by_id('SpecHeaderEditItemLink'), 'td', 'Edit Information')
 
     form = br.find_element_by_name('DataEntryForm')
     item_number_fields = form.find_elements_by_name('format_field_values')
@@ -630,10 +669,7 @@ def replace_part(br, **properties):
     #make sure all required drop-down menus have values to prevent errors
     div = form.find_element_by_id('attsCatDriven')
     for sel in div.find_elements_by_tag_name('select'):
-        for val in sel.find_elements_by_tag_name('option'):
-            if val.text == 'No':
-                val.click()
-                break
+        click_in_list(sel, 'option', 'No')
 
     form.find_element_by_name('submit').click()
 
@@ -643,15 +679,24 @@ def replace_part(br, **properties):
     #</obsolete item>
 
     if properties['dco']:
-        if 'dco_title' in properties.keys():
+        properties['revision'] = old_rev
+        if 'dco_number' in properties.keys():
+            br = open_obsolete_dco(br, **properties)
+        elif 'dco_title' in properties.keys():
             [br, dco_number] = new_obsolete_dco(br, **properties)
             del properties['dco_title']
             properties['dco_number'] = dco_number
-        elif 'dco_number' in properties.keys():
-            br = open_obsolete_dco(br, **properties)
+        properties['revision'] = revision
 
     create_part(br, **properties)
 
+def check_dco(br, **properties):
+    if properties['dco']:
+        if 'dco_number' in properties.keys():
+            add_to_dco(br, **properties)
+        elif 'dco_title' in properties.keys():
+            create_dco(br, **properties)
+            
 def create_dco(br, **properties):
 
     br = go_to_actions_dco(br, **properties)
@@ -779,7 +824,7 @@ def go_to_actions_dco(br, **properties):
     form.find_element_by_id('formChangeDesc').send_keys(description)
 
     for opt in form.find_element_by_name('form_routings').find_elements_by_tag_name('option'):
-        if opt.get_attribute('value') == '22518':
+        if 'Hardware - No Change to Published Specs' in opt.text:
             opt.click()
             break
 
@@ -872,16 +917,26 @@ def working_rev(br):
             r.click() #select working revision for part
             break
     return br
+
+def click_in_list(form, tag, text):
+    for option in form.find_elements_by_tag_name(tag):
+        if option.text == text:
+            option.click()
+            break
     
-def show_error(title, msg):
+def show_error(title, msg, browser=None):
+    if browser:
+        browser.quit()
     wx.MessageBox(msg, title, wx.OK|wx.ICON_ERROR)
     app.Destroy()
     sys.exit(1)
 
-def completed(title, msg, browser):
-    browser.quit()
+def completed(title, msg, browser=None):
+    if browser:
+        browser.quit()
     wx.MessageBox(msg, title, wx.OK|wx.ICON_INFORMATION)
     app.Destroy()
+    sys.exit(0)
 
 
 def xor_crypt_string(data, key='adhurjaty', encode=False, decode=False):
@@ -893,7 +948,11 @@ def xor_crypt_string(data, key='adhurjaty', encode=False, decode=False):
     return xored
 
 if __name__ == '__main__':
-  
+
     app = wx.App()
-    Interface(None, title='Login')
+    
+    if len(sys.argv) > 1 and sys.argv[1] == '-debug':
+        Interface(None, title='Login', debug=True)
+    else:
+        Interface(None, title='Login')
     app.MainLoop()
