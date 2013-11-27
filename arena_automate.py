@@ -227,6 +227,9 @@ class Verify(wx.Panel):
 
         sizer = wx.GridBagSizer(rows, 4)
 
+        self.pn_text = wx.TextCtrl(self)
+        self.pn_text.WriteText(part_number)
+        
         if new_part == 2:
             text = wx.StaticText(self, label="Replace:")
             sizer.Add(text, pos=(1, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
@@ -238,8 +241,6 @@ class Verify(wx.Panel):
             text = wx.StaticText(self, label="With:")
             sizer.Add(text, pos=(2, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
-            self.pn_text = wx.TextCtrl(self)
-            self.pn_text.WriteText(part_number)
             sizer.Add(self.pn_text, pos=(2, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
@@ -247,8 +248,6 @@ class Verify(wx.Panel):
             text = wx.StaticText(self, label="Part Number:")
             sizer.Add(text, pos=(1, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
-            self.pn_text = wx.TextCtrl(self)
-            self.pn_text.WriteText(part_number)
             sizer.Add(self.pn_text, pos=(1, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
@@ -266,6 +265,8 @@ class Verify(wx.Panel):
             sizer.Add(text, pos=(rows-7, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
             self.name_text = wx.TextCtrl(self)
+            if 'part_name' in self.params.keys():
+                self.name_text.WriteText(self.params['part_name'])
             sizer.Add(self.name_text, pos=(rows-7, 1), span=(1, 4), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
@@ -297,12 +298,11 @@ class Verify(wx.Panel):
         self.image_button.Bind(wx.EVT_BUTTON, self.image_browse)
         sizer.Add(self.image_button, pos=(rows-4, 1), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
-        try:
+        if 'image' in self.params.keys():
             self.image_path = wx.StaticText(self, label=self.params['image'].split('\\')[-1])
             sizer.Add(self.image_path, pos=(rows-4, 2), span=(1, 2), 
                 flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-        except:
-            pass
+        
 
         cb = wx.CheckBox(self, label='Add to DCO')
         cb.Bind(wx.EVT_CHECKBOX, self.create_dco)
@@ -330,9 +330,7 @@ class Verify(wx.Panel):
         #self.parent.SetTitle('Select Action')
         self.parent.Hide()
         #self.parent.prompt_panel.Show()
-        self.params['part_number'] = self.pn_text.GetValue()
-        self.params['revision'] = self.rev_text.GetValue()
-        self.params['dco'] = self.parent.dco
+        self.collect_values()
 
         if self.parent.dco:
             self.parent.Show()
@@ -343,12 +341,24 @@ class Verify(wx.Panel):
         else:
             self.execute_action()
 
+    def collect_values(self):
+        self.params['part_number'] = self.pn_text.GetValue()
+        self.params['revision'] = self.rev_text.GetValue()
+        self.params['dco'] = self.parent.dco
+
+        if self.new_part:
+            self.params['part_name'] = self.name_text.GetValue()
+        if self.new_part == 2:
+            self.params['old_part_number'] = self.rep_text.GetValue()
+        
     def click_browse(self, e=None):
+        self.collect_values()
         properties = get_pdf(self)
         self.params.update(properties)
         self.populate_form(self.new_part, **self.params)
 
     def image_browse(self, e=None):
+        self.collect_values()
         dlg = wx.FileDialog(self, 'Choose Part Image',
                             'M:\\Drawings\\Inventor part no 16xxxx',
                             '', 'JPEG or PNG (*.jpg *.png)|*.jpg;*.png;*.bmp')
@@ -373,12 +383,6 @@ class Verify(wx.Panel):
         if we have already authenticated email and password by logging into Arena
         then the browser should be save and we do not have to log in again
         '''
-        if self.new_part:
-            self.params['part_name'] = self.name_text.GetValue()
-            
-        if self.new_part == 2:
-            self.params['old_part_number'] = self.rep_text.GetValue()
-
         if br:
             br = part_fnc[self.new_part](br, **self.params)
         else:
@@ -556,12 +560,17 @@ def create_part(br, **properties):
 
     #part specs page
     #<add image>
-    '''
+    
     if 'image' in properties.keys():
-        click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
-        table.find_element_by_name('form_image_file_name').clear()
-        table.find_element_by_name('form_image_file_name').send_keys(properties['image'])
-    '''
+        #click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
+        for option in br.find_element_by_id('SpecHeaderUploadImageLink').find_elements_by_tag_name('td'):
+            if option.get_attribute('class') == 'TDViewBtn' and 'Select Image' in option.text:
+                option.click()
+                break
+                
+        #br.find_element_by_name('form_image_file_name').clear()
+        br.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+    
     #</add image>
     
     br = go_to_tab(br, 'Files')
@@ -605,11 +614,18 @@ def update_part(br, **properties):
     #part page
     br = working_rev(br) #go to working revision in drop-down
     br = go_to_tab(br, 'Specs')
+    
     #<add image>
     if 'image' in properties.keys():
-        click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
-        table.find_element_by_name('form_image_file_name').clear()
-        table.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+        #click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
+        for option in br.find_element_by_id('SpecHeaderUploadImageLink').find_elements_by_tag_name('td'):
+            if option.get_attribute('class') == 'TDViewBtn' and 'Select Image' in option.text:
+                option.click()
+                break
+                
+        #br.find_element_by_name('form_image_file_name').clear()
+        br.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+    
     #</add image>
     
     br = go_to_tab(br, 'Files')
@@ -920,7 +936,7 @@ def working_rev(br):
 
 def click_in_list(form, tag, text):
     for option in form.find_elements_by_tag_name(tag):
-        if option.text == text:
+        if text in option.text:
             option.click()
             break
     
