@@ -285,6 +285,10 @@ class Verify(wx.Panel):
                 sizer.Add(text, pos=(row, 0), flag=wx.TOP|wx.LEFT|wx.BOTTOM, border=5)
 
                 self.opts[o] = wx.TextCtrl(self)
+                try:
+                    self.opts[o].WriteText(' '.join(self.params['options'][o]))
+                except:
+                    pass
                 sizer.Add(self.opts[o], pos=(row, 1), span=(1, 4),
                           flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
 
@@ -599,7 +603,7 @@ def create_part(br, **properties):
 
     #part specs page
     if 'image' in properties.keys():
-        add_image()
+        add_image(br)
     
     br = go_to_tab(br, 'Files')
 
@@ -646,16 +650,19 @@ def update_part(br, **properties):
     revision = properties['revision']
     engineer = properties['engineer']
     path = properties['path']
+    options = properties['options']
     
     #items page
-    br = search_item(br, part_number)
+    part_links = search_item(br, part_number)
+    br.get(part_links.pop(0).get_attribute('href'))
 
     #part page
     br = working_rev(br) #go to working revision in drop-down
     br = go_to_tab(br, 'Specs')
     
     #<add image>
-    add_image()
+    if 'image' in properties.keys():
+        add_image(br)
     
     #</add image>
     
@@ -677,7 +684,15 @@ def update_part(br, **properties):
 
     #creates or adds to DCO depending on user specification
     dco_number = check_dco(br, **properties)
+
+    if dco_number and options:
+        del properties['dco_title']
+        properties['dco_number'] = dco_number
         
+        for link in part_links:
+            properties['part_number'] = link.text.split('-')[:1]
+            br.get(link.get_attribute('href'))
+            check_dco(br, **properties)
         
     completed('Item Revised', 'Successfully Revised Item', br)
 
@@ -688,7 +703,8 @@ def replace_part(br, **properties):
     path = properties['path']
 
     #<obsolete item>
-    br = search_item(br, part_number)
+    part_links = search_item(br, part_number)
+    br.get(part_links.pop(0).get_attribute('href'))
 
     'get revision letter from soon-to-be-deprecated part'
     old_rev = next((re.search('[0-9A-Z]', o.text).group(0)
@@ -739,7 +755,7 @@ def replace_part(br, **properties):
 
     create_part(br, **properties)
 
-def add_image():
+def add_image(br):
     #click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
     for option in br.find_element_by_id('SpecHeaderUploadImageLink').find_elements_by_tag_name('td'):
         if option.get_attribute('class') == 'TDViewBtn' and 'Select Image' in option.text:
@@ -962,13 +978,13 @@ def search_item(br, pn):
     if error_info:
         show_error('Non matching error', 'No item matches that part number')
 
+    part_links = []
     if 'list-main' in br.current_url.split('/'): #if return search results
         for link in br.find_elements_by_tag_name('a'):
             if pn in link.text:
-                br.get(link.get_attribute('href')) #go to first item in list
-                break
+                part_links.append(link) #go to first item in list
 
-    return br
+    return part_links
 
 def copy_part(br, **properties):
     br.get(br.find_element_by_link_text('Duplicate Item').get_attribute('href'))
