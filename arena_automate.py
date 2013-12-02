@@ -706,7 +706,7 @@ def replace_part(br, **properties):
 
     #<obsolete item>
     part_links = search_item(br, part_number)
-    br.get(part_links.pop(0).get_attribute('href'))
+    br.get(part_links.pop(0)['link'])
 
     'get revision letter from soon-to-be-deprecated part'
     old_rev = next((re.search('[0-9A-Z]', o.text).group(0)
