@@ -603,7 +603,7 @@ def create_part(br, **properties):
 
     #part specs page
     if 'image' in properties.keys():
-        add_image(br)
+        add_image(br, properties['image'])
     
     br = go_to_tab(br, 'Files')
 
@@ -623,7 +623,8 @@ def create_part(br, **properties):
         form.find_element_by_name('file_to_upload_0').send_keys(path)
     
     table.find_element_by_name('form_file_identifier').clear()
-    table.find_element_by_name('form_file_identifier').send_keys(part_number)
+    table.find_element_by_name('form_file_identifier').send_keys(
+        os.path.basename(path)[:os.path.basename(path).rfind('-')])
     table.find_element_by_name('form_edition_identifier').send_keys(revision)
 
     click_in_list(table.find_element_by_name('form_file_author'), 'option', engineer)
@@ -654,7 +655,7 @@ def update_part(br, **properties):
     
     #items page
     part_links = search_item(br, part_number)
-    br.get(part_links.pop(0).get_attribute('href'))
+    br.get(part_links.pop(0)['url'])
 
     #part page
     br = working_rev(br) #go to working revision in drop-down
@@ -662,7 +663,7 @@ def update_part(br, **properties):
     
     #<add image>
     if 'image' in properties.keys():
-        add_image(br)
+        add_image(br, properties['image'])
     
     #</add image>
     
@@ -680,7 +681,8 @@ def update_part(br, **properties):
             o.click()
             break
 
-    add_file(form, path, part_number, revision, engineer)
+    add_file(form, path, os.path.basename(path)[:os.path.basename(path).rfind('-')],
+             revision, engineer)
 
     #creates or adds to DCO depending on user specification
     dco_number = check_dco(br, **properties)
@@ -690,8 +692,8 @@ def update_part(br, **properties):
         properties['dco_number'] = dco_number
         
         for link in part_links:
-            properties['part_number'] = link.text.split('-')[:1]
-            br.get(link.get_attribute('href'))
+            properties['part_number'] = link['text'].split('-')[:1]
+            br.get(link['url'])
             check_dco(br, **properties)
         
     completed('Item Revised', 'Successfully Revised Item', br)
@@ -755,7 +757,7 @@ def replace_part(br, **properties):
 
     create_part(br, **properties)
 
-def add_image(br):
+def add_image(br, image):
     #click_in_list(br.find_element_by_id('SpecHeaderUploadImageLink'), 'td', 'Select Image')
     for option in br.find_element_by_id('SpecHeaderUploadImageLink').find_elements_by_tag_name('td'):
         if option.get_attribute('class') == 'TDViewBtn' and 'Select Image' in option.text:
@@ -763,7 +765,7 @@ def add_image(br):
             break
             
     #br.find_element_by_name('form_image_file_name').clear()
-    br.find_element_by_name('form_image_file_name').send_keys(properties['image'])
+    br.find_element_by_name('form_image_file_name').send_keys(image)
     br.find_element_by_xpath("//input[@name='submit']").click()
     
 def check_dco(br, **properties):
@@ -982,7 +984,8 @@ def search_item(br, pn):
     if 'list-main' in br.current_url.split('/'): #if return search results
         for link in br.find_elements_by_tag_name('a'):
             if pn in link.text:
-                part_links.append(link) #go to first item in list
+                #go to first item in list
+                part_links.append(dict(url=link.get_attribute('href'), text=link.text))
 
     return part_links
 
